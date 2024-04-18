@@ -17,8 +17,11 @@ typedef struct BB {
 } BB;
 
 typedef struct IR_Function {
-    BB** blocks;
-    u32 len;
+    struct {
+        BB** at;
+        u32 len;
+        u64 cap;
+    } blocks;
 
     u32 entry_idx;
     u32 exit_idx;

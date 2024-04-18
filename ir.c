@@ -28,13 +28,6 @@ IR_Load* ir_make_load(IR* location, type* T) {
     return ir;
 }
 
-IR_Load* ir_make_load(IR* location, type* T) {
-    IR_Load* ir = (IR_Load*) ir_make(IR_LOAD);
-    ir->location = location;
-    ir->T = T;
-    return ir;
-}
-
 const size_t ir_sizes[] = {
     [IR_INVALID]    = 0,
     [IR_ELIMINATED] = 0,
