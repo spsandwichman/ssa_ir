@@ -46,7 +46,7 @@ BB2 {
 
 EXIT {
     #23     load #7
-    #24     setreturn 0, #23
+    #24     setreturn <0> #23
     #25     ret
 }
 

@@ -45,8 +45,8 @@ const size_t ir_sizes[] = {
     [IR_STORE]     = sizeof(IR_Store),
     [IR_VOL_STORE] = sizeof(IR_Store),
 
-    [IR_CONST]  = sizeof(IR_Const),
-    [IR_SYMBOL] = sizeof(IR_Symbol),
+    [IR_CONST]      = sizeof(IR_Const),
+    [IR_LOADSYMBOL] = sizeof(IR_LoadSymbol),
 
     [IR_MOV] = sizeof(IR_Mov),
     [IR_PHI] = sizeof(IR_Phi),

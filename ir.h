@@ -10,13 +10,20 @@ typedef struct BB BB;
 typedef struct CFG CFG;
 typedef struct IR_Function IR_Function;
 
-typedef struct BB {
-    IR** at;
-    u64 len;
-    u64 cap;
-} BB;
+typedef struct IR_Module {
+
+} IR_Module;
+
+typedef struct IR_Global {
+    type* T;
+    string label;
+
+    
+} IR_Global;
 
 typedef struct IR_Function {
+    string label;
+
     struct {
         BB** at;
         u32 len;
@@ -27,8 +34,15 @@ typedef struct IR_Function {
     u32 exit_idx;
 
     arena* alloca;
-
 } IR_Function;
+
+typedef struct BB {
+    IR** at;
+    u64 len;
+    u64 cap;
+
+    string name;
+} BB;
 
 enum {
     IR_INVALID,
@@ -48,7 +62,7 @@ enum {
     IR_VOL_STORE,
 
     IR_CONST,
-    IR_SYMBOL,
+    IR_LOADSYMBOL,
 
     IR_MOV,
     IR_PHI,
@@ -118,11 +132,11 @@ typedef struct IR_Const {
     type* T;
 } IR_Const;
 
-typedef struct IR_Symbol {
+typedef struct IR_LoadSymbol {
     IR base;
     
     string symbol;
-} IR_Symbol;
+} IR_LoadSymbol;
 
 typedef struct IR_Mov {
     IR base;
