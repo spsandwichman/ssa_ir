@@ -1,0 +1,51 @@
+let func = fn(a, b: int) -> int {
+    mut c: int;
+    if 0 < a {
+        c = a + b;
+    } else {
+        c = a - b;
+    }
+    return c;
+};
+
+=========================
+
+ENTRY {
+    #1      getparam 0                    // this just gets codegen'd to a move from CC register (hopefully elided)
+    #2      stackalloc <size 8, align 8>  // a
+    #3      store #2, #1
+    
+    #4      getparam 1
+    #5      stackalloc <size 8, align 8>  // b
+    #6      store #4, #3
+
+    #7      stackalloc <size 8, align 8>  // c
+    #8      const <type i64, val 0>
+    #9      store #7, #8
+
+    #10     load #2   // a
+    #11     const <type i64, val 0>
+    #12     if #11 < #10 branch BB1 else BB2
+}
+
+BB1 {
+    #13     load #2
+    #14     load #5
+    #15     add #13, #14
+    #16     store #7, #15
+    #17     jump EXIT
+}
+
+BB2 {
+    #18     load #2
+    #19     load #5
+    #20     sub #18, #19
+    #21     store #7, #20
+    #22     jump EXIT
+}
+
+EXIT {
+    #23     load #7
+    #24     setreturn 0, #23
+    #25     ret
+}
