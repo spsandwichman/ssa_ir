@@ -21,12 +21,14 @@ typedef struct IR_Function {
 
     u32 entry_idx;
     u32 exit_idx;
+
+
 } IR_Function;
 
 
 enum {
     IR_INVALID,
-    IR_ELIMINATED,
+    IR_ELIMINATED, // an IR element that has been "deleted".
 
     IR_ADD,
     IR_SUB,

@@ -1,8 +1,15 @@
 #include "ir.h"
 
-IR* new_IR(u8 type) {
+IR* ir_make(u8 type) {
     IR* ir = malloc(ir_sizes[type]);
-    
+    ir->tag = type;
+    return ir;
+}
+
+IR_BinOp* ir_make_binop(IR* lhs, IR* rhs, u8 binop_type) {
+    IR_BinOp* ir = (IR_BinOp*) ir_make(binop_type);
+    ir->lhs = lhs;
+    ir->rhs = rhs;
 }
 
 const size_t ir_sizes[] = {
