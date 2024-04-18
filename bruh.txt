@@ -14,7 +14,7 @@ ENTRY {
     #1      getparam <0>                  // this just gets codegen'd to a move from CC register (hopefully elided)
     #2      stackalloc <size 8, align 8>  // a
     #3      store #2, #1
-    
+
     #4      getparam <1>
     #5      stackalloc <size 8, align 8>  // b
     #6      store #4, #3

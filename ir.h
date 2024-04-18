@@ -3,6 +3,7 @@
 #include "orbit.h"
 #include "type.h"
 #include "exactval.h"
+#include "arena.h"
 
 typedef struct IR IR;
 typedef struct BB BB;
@@ -22,9 +23,9 @@ typedef struct IR_Function {
     u32 entry_idx;
     u32 exit_idx;
 
+    arena* alloca;
 
 } IR_Function;
-
 
 enum {
     IR_INVALID,
@@ -34,8 +35,6 @@ enum {
     IR_SUB,
     IR_MUL,
     IR_DIV,
-
-    IR_GETFIELDPTR,
 
     IR_STACKALLOC,
 
@@ -80,20 +79,11 @@ typedef struct IR_StackAlloc {
     type* T;
 } IR_StackAlloc;
 
-typedef struct IR_GetFieldPtr {
-    IR base;
-
-    u32 index;
-
-    IR* ptr;
-
-    type* T;
-} IR_GetFieldPtr;
-
 typedef struct IR_Load {
     IR base;
 
     IR* location;
+    type* T;
 } IR_Load;
 
 typedef struct IR_Store {
@@ -101,6 +91,7 @@ typedef struct IR_Store {
 
     IR* location;
     IR* value;
+    type* T;
 } IR_Store;
 
 typedef struct IR_Const {
@@ -162,10 +153,13 @@ enum {
 typedef struct IR_Branch {
     IR base;
 
-    BB* if_true;
-    BB* if_false;
+    u8 cond;
+
     IR* lhs;
     IR* rhs;
+
+    BB* if_true;
+    BB* if_false;
 } IR_Branch;
 
 typedef struct IR_GetParam {
@@ -178,6 +172,7 @@ typedef struct IR_SetReturn {
     IR base;
 
     u16 return_idx;
+    IR* source;
 } IR_SetReturn;
 
 typedef struct IR_Ret {
