@@ -2,27 +2,62 @@
 
 #include "orbit.h"
 #include "type.h"
-#include "exactval.h"
 #include "arena.h"
 
 typedef struct IR IR;
 typedef struct BB BB;
 typedef struct CFG CFG;
+typedef struct IR_Module IR_Module;
+typedef struct IR_Symbol IR_Symbol;
+typedef struct IR_Global IR_Global;
 typedef struct IR_Function IR_Function;
 
 typedef struct IR_Module {
+    IR_Function** functions;
+    IR_Global** globals;
+
+    u32 functions_len;
+    u32 globals_len;
+
+    string name;
+
+    struct {
+        IR_Symbol** at;
+        size_t len;
+        size_t cap;
+    } symtab;
 
 } IR_Module;
 
+enum {
+    IR_SYM_GLOBAL,
+    IR_SYM_LOCAL,
+};
+
+typedef struct IR_Symbol {
+    string name;
+    union {
+        IR_Function* function;
+        IR_Global* global;
+    };
+    bool is_function;
+    u8 tag;
+} IR_Symbol;
+
 typedef struct IR_Global {
     type* T;
-    string label;
 
-    
+    IR_Symbol* sym;
+
+    u8* data;
+    u32 data_len;
+
+    bool zeroed;
+    bool read_only;
 } IR_Global;
 
 typedef struct IR_Function {
-    string label;
+    IR_Symbol* sym;
 
     struct {
         BB** at;
@@ -33,7 +68,7 @@ typedef struct IR_Function {
     u32 entry_idx;
     u32 exit_idx;
 
-    arena* alloca;
+    arena alloca;
 } IR_Function;
 
 typedef struct BB {
@@ -48,36 +83,67 @@ enum {
     IR_INVALID,
     IR_ELIMINATED, // an IR element that has been "deleted".
 
+    // IR_BinOp
     IR_ADD,
     IR_SUB,
     IR_MUL,
     IR_DIV,
 
+    // IR_BinOp
+    IR_AND,
+    IR_OR,
+    IR_NOR,
+    IR_XOR,
+    IR_SHL,
+    IR_SHR,
+    IR_TRUNC,
+    IR_SEXT,
+    IR_ZEXT,
+
+    // IR_Cast
+    IR_CAST,
+
+    // IR_StackAlloc
     IR_STACKALLOC,
 
+    // IR_Load
     IR_LOAD,
     IR_VOL_LOAD,
 
+    // IR_Store
     IR_STORE,
     IR_VOL_STORE,
 
+    // IR_Const
     IR_CONST,
+    // IR_LoadSymbol
     IR_LOADSYMBOL,
 
+    // IR_Mov
     IR_MOV,
+    // IR_Phi
     IR_PHI,
 
+    // IR_Branch
     IR_BRANCH,
+    // IR_Jump
     IR_JUMP,
 
+    // IR_GetParam
     IR_GETPARAM,
+
+    // IR_SetReturn
     IR_SETRETURN,
 
-    IR_RET,
+    // IR_Return
+    IR_RETURN,
+
+    IR_INSTR_COUNT,
 };
 
-// basic IR structure, common with every node
+// basic IR structure
 typedef struct IR {
+    u32 number;
     u8 tag;
 } IR;
 
@@ -87,6 +153,13 @@ typedef struct IR_BinOp {
     IR* lhs;
     IR* rhs;
 } IR_BinOp;
+
+typedef struct IR_Cast {
+    IR base;
+
+    type* to;
+    IR* source;
+} IR_Cast;
 
 typedef struct IR_StackAlloc {
     IR base;
@@ -115,6 +188,8 @@ typedef struct IR_Const {
     IR base;
 
     union {
+        bool bool;
+        
         i8  i8;
         i16 i16;
         i32 i32;
@@ -135,7 +210,8 @@ typedef struct IR_Const {
 typedef struct IR_LoadSymbol {
     IR base;
     
-    string symbol;
+    IR_Symbol* sym;
+    type* T;
 } IR_LoadSymbol;
 
 typedef struct IR_Mov {
@@ -192,8 +268,8 @@ typedef struct IR_SetReturn {
     IR* source;
 } IR_SetReturn;
 
-typedef struct IR_Ret {
+typedef struct IR_Return {
     IR base;
-} IR_Ret;
+} IR_Return;
 
 extern const size_t ir_sizes[];

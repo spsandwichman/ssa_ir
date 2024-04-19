@@ -2,4 +2,4 @@
 
 rm -f ./ir
 
-gcc main.c ir.c type.c -o ir
+gcc main.c ir.c type.c arena.c -o ir
