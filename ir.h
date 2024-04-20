@@ -30,13 +30,14 @@ typedef struct IR_Module {
 } IR_Module;
 
 enum {
-    IR_SYM_GLOBAL,
     IR_SYM_LOCAL,
+    IR_SYM_GLOBAL,
 };
 
 typedef struct IR_Symbol {
     string name;
     union {
+        void* ref;
         IR_Function* function;
         IR_Global* global;
     };
@@ -62,7 +63,7 @@ typedef struct IR_Function {
     struct {
         BB** at;
         u32 len;
-        u64 cap;
+        u32 cap;
     } blocks;
 
     u32 entry_idx;
@@ -70,6 +71,8 @@ typedef struct IR_Function {
 
     arena alloca;
 } IR_Function;
+
+#define IR_FN_ALLOCA_BLOCK_SIZE 0x1000
 
 typedef struct BB {
     IR** at;
@@ -231,7 +234,7 @@ typedef struct IR_Phi {
 typedef struct IR_Jump {
     IR base;
 
-    BB* destination;
+    BB* dest;
 } IR_Jump;
 
 enum {
@@ -273,3 +276,27 @@ typedef struct IR_Return {
 } IR_Return;
 
 extern const size_t ir_sizes[];
+
+IR_Module*   ir_new_module(string name);
+IR_Function* ir_new_function(IR_Module* mod, IR_Symbol* sym, bool global);
+IR_Symbol*   ir_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
+IR_Symbol*   ir_find_symbol(IR_Module* mod, string name);
+IR_Symbol*   ir_find_or_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
+
+IR*            ir_make(IR_Function* f, u8 type);
+IR_BinOp*      ir_make_binop(IR_Function* f, IR* lhs, IR* rhs, u8 type);
+IR_Cast*       ir_make_cast(IR_Function* f, IR* source, type* to);
+IR_StackAlloc* ir_make_stackalloc(IR_Function* f, u32 size, u32 align, type* T);
+IR_Load*       ir_make_load(IR_Function* f, IR* location, type* T, bool is_vol);
+IR_Store*      ir_make_store(IR_Function* f, IR* location, IR* value, type* T, bool is_vol);
+IR_Const*      ir_make_const(IR_Function* f, type* T);
+IR_LoadSymbol* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol, type* T);
+IR_Mov*        ir_make_mov(IR_Function* f, IR* source);
+IR_Phi*        ir_make_phi(IR_Function* f, u16 count, ...);
+IR_Jump*       ir_make_jump(IR_Function* f, BB* dest);
+IR_Branch*     ir_make_branch(IR_Function* f, u8 cond, IR* lhs, IR* rhs, BB* if_true, BB* if_false);
+IR_GetParam*   ir_make_getparam(IR_Function* f, u16 param);
+IR_SetReturn*  ir_make_setreturn(IR_Function* f, u16 param, IR* source);
+IR_Return*     ir_make_return(IR_Function* f);
+
+void ir_add_phi_source(IR_Phi* phi, IR* source, BB* source_block);
