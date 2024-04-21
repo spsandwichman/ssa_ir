@@ -26,18 +26,24 @@ IR_Function* ir_new_function(IR_Module* mod, IR_Symbol* sym, bool global) {
 
     mod->functions = realloc(mod->functions, mod->functions_len+1);
     mod->functions[mod->functions_len++] = fn;
+    return fn;
 }
 
 // takes multiple type*
 void ir_set_func_params(IR_Function* f, u16 count, ...) {
     f->params_len = count;
 
-    f->params = malloc(sizeof(*f->params) * count);
+    if (f->params) free(f->params);
+
+    f->params = malloc(sizeof(IR_FuncItem) * count);
+
+    if (!f->params) CRASH("malloc failed");
 
     va_list args;
     va_start(args, count);
     FOR_RANGE(i, 0, count) {
         IR_FuncItem* item = malloc(sizeof(IR_FuncItem));
+        if (!item) CRASH("item malloc failed");
         item->T = va_arg(args, type*);
         f->params[i] = item;
     }
@@ -60,24 +66,30 @@ void ir_set_func_returns(IR_Function* f, u16 count, ...) {
     va_end(args);
 }
 
-// if (sym == NULL), create new symbol with no name
-IR_Global* ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only, bool zeroed) {
+// if (sym == NULL), create new symbol with default name
+IR_Global* ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only) {
     IR_Global* gl = malloc(sizeof(IR_Global));
 
-    gl->sym = sym ? sym : ir_new_symbol(mod, NULL_STR, global, false, gl);
+    gl->sym = sym ? sym : ir_new_symbol(mod, strprintf("symbol%zu", sym), global, false, gl);
     gl->read_only = read_only;
-    gl->zeroed = zeroed;
     gl->data = NULL;
     gl->data_len = 0;
 
     mod->globals = realloc(mod->globals, mod->globals_len+1);
     mod->globals[mod->globals_len++] = gl;
+    return gl;
 }
 
-void ir_set_global_data(IR_Global* global, type* T, u8* data, u32 data_len) {
-    global->T = T;
+void ir_set_global_data(IR_Global* global, u8* data, u32 data_len, bool zeroed) {
+    global->is_symbol_ref = false;
     global->data = data;
     global->data_len = data_len;
+    global->zeroed = zeroed;
+}
+
+void ir_set_global_symref(IR_Global* global, IR_Symbol* symref) {
+    global->is_symbol_ref = true;
+    global->symref = symref;
 }
 
 // WARNING: does NOT check if a symbol already exists
@@ -90,6 +102,7 @@ IR_Symbol* ir_new_symbol(IR_Module* mod, string name, u8 tag, bool function, voi
     sym->tag = tag;
 
     da_append(&mod->symtab, sym);
+    return sym;
 }
 
 // use this instead of ir_new_symbol
@@ -137,6 +150,8 @@ IR* ir_make(IR_Function* f, u8 type) {
     if (type > IR_INSTR_COUNT) type = IR_INVALID;
     IR* ir = arena_alloc(&f->alloca, ir_sizes[type], 8);
     ir->tag = type;
+    ir->T = NULL;
+    ir->number = 0;
     return ir;
 }
 
@@ -183,7 +198,7 @@ const size_t ir_sizes[] = {
     [IR_RETURN] = sizeof(IR_Return),
 };
 
-IR* ir_make_binop(IR_Function* f, IR* lhs, IR* rhs, u8 type) {
+IR* ir_make_binop(IR_Function* f, u8 type, IR* lhs, IR* rhs) {
     IR_BinOp* ir = (IR_BinOp*) ir_make(f, type);
     
     ir->lhs = lhs;
@@ -207,6 +222,13 @@ IR* ir_make_stackalloc(IR_Function* f, u32 size, u32 align, type* T) {
     return (IR*) ir;
 }
 
+IR* ir_make_getfieldptr(IR_Function* f, u16 index, IR* source) {
+    IR_GetFieldPtr* ir = (IR_GetFieldPtr*) ir_make(f, IR_GETFIELDPTR);
+    ir->index = index;
+    ir->source = source;
+    return (IR*) ir;
+}
+
 IR* ir_make_load(IR_Function* f, IR* location, type* T, bool is_vol) {
     IR_Load* ir = (IR_Load*) ir_make(f, IR_LOAD);
 
@@ -226,16 +248,14 @@ IR* ir_make_store(IR_Function* f, IR* location, IR* value, type* T, bool is_vol)
     return (IR*) ir;
 }
 
-IR* ir_make_const(IR_Function* f, type* T) {
+IR* ir_make_const(IR_Function* f) {
     IR_Const* ir = (IR_Const*) ir_make(f, IR_CONST);
-    ir->T = T;
     return (IR*) ir;
 }
 
-IR* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol, type* T) {
+IR* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol) {
     IR_LoadSymbol* ir = (IR_LoadSymbol*) ir_make(f, IR_LOADSYMBOL);
     ir->sym = symbol;
-    ir->T = T;
     return (IR*) ir;
 }
 
@@ -320,6 +340,122 @@ IR* ir_make_return(IR_Function* f) {
     return ir_make(f, IR_RETURN);
 }
 
+
+forceinline bool is_type_integer(type* t) {
+    switch (t->tag) {
+    case TYPE_UNTYPED_INT:
+    case TYPE_I8:
+    case TYPE_I16:
+    case TYPE_I32:
+    case TYPE_I64:
+    case TYPE_U8:
+    case TYPE_U16:
+    case TYPE_U32:
+    case TYPE_U64:
+        return true;
+    default:
+        return false;
+    }
+}
+
+forceinline bool is_type_float(type* t) {
+    switch (t->tag) {
+    case TYPE_F16:
+    case TYPE_F32:
+    case TYPE_F64:
+        return true;
+    default:
+        return false;
+    }
+}
+
+forceinline bool is_type_sinteger(type* t) {
+    switch (t->tag) {
+    case TYPE_UNTYPED_INT:
+    case TYPE_I8:
+    case TYPE_I16:
+    case TYPE_I32:
+    case TYPE_I64:
+        return true;
+    default:
+        return false;
+    }
+}
+
+forceinline bool is_type_uinteger(type* t) {
+    switch (t->tag) {
+    case TYPE_U8:
+    case TYPE_U16:
+    case TYPE_U32:
+    case TYPE_U64:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void ir_type_resolve_all(IR_Module* mod, IR_Function* f, bool assume_correct) {
+    if (!assume_correct) {
+        FOR_URANGE(bb, 0, f->blocks.len) {
+            FOR_URANGE(i, 0, f->blocks.at[bb]->len) {
+                f->blocks.at[bb]->at[i]->T = NULL;
+            }
+        }
+    }
+
+
+    FOR_URANGE(bb, 0, f->blocks.len) {
+        FOR_URANGE(i, 0, f->blocks.at[bb]->len) {
+            ir_type_resolve(mod, f, f->blocks.at[bb]->at[i], true);
+        }
+    }
+
+}
+
+void ir_type_resolve(IR_Module* mod, IR_Function* f, IR* ir, bool assume_correct) {
+    if (ir->T != NULL && assume_correct) return; // if it already has a type, assume that type is correct
+
+    switch (ir->tag) {
+    case IR_INVALID:
+    case IR_ELIMINATED:
+        ir->T = make_type(TYPE_NONE);
+        break;
+    case IR_ADD:
+    case IR_SUB:
+    case IR_MUL:
+    case IR_DIV:
+    case IR_AND:
+    case IR_OR:
+    case IR_NOR:
+    case IR_XOR:
+        IR_BinOp* binop = (IR_BinOp*) ir;
+        ir_type_resolve(mod, f, binop->lhs, true);
+        ir_type_resolve(mod, f, binop->rhs, true);
+        if (binop->lhs->T != binop->rhs->T) {
+            CRASH("type mismatch");
+        }
+        if (!is_type_integer(binop->lhs->T)) {
+            CRASH("type is not integer (TODO work w/ floats)");
+        }
+        ir->T = binop->lhs->T;
+        break;
+    case IR_PARAMVAL:
+        IR_ParamVal* paramval = (IR_ParamVal*) ir;
+        ir->T = f->params[paramval->param_idx]->T;
+        break;
+    case IR_RETURNVAL:
+        IR_ReturnVal* returnval = (IR_ReturnVal*) ir;
+        ir->T = f->returns[returnval->return_idx]->T;
+        break;
+    case IR_RETURN:
+        ir->T = make_type(TYPE_NONE);
+        break;
+    default:
+        CRASH("unhandled ir type");
+    }
+
+}
+
 u32 ir_renumber(IR_Function* f) {
     u32 count = 0;
     FOR_URANGE(i, 0, f->blocks.len) {
@@ -383,7 +519,7 @@ void ir_print_ir(IR* ir) {
         return;
     }
 
-    printf("#%zu =\t", ir->number);
+    printf("#%zu "str_fmt"\t = ", ir->number, str_arg(type_to_string(ir->T)));
     switch (ir->tag) {
     case IR_INVALID: 
         printf("invalid"); 
@@ -429,4 +565,48 @@ void ir_print_ir(IR* ir) {
         printf("unimplemented %zu", (size_t)ir->tag);
         break;
     }
+}
+
+void ir_print_module(IR_Module* mod) {
+    printf("module \""str_fmt"\"\n", str_arg(mod->name));
+    printf("-> %zu functions:\n", mod->functions_len);
+}
+
+static char* write_str(char* buf, char* src) {
+    memcpy(buf, src, strlen(src));
+    return buf + strlen(src);
+}
+
+static char* type2str_internal(type* t, char* buf) {
+    if (t == NULL) {
+        buf = write_str(buf, "[null]"); 
+        return buf;
+    }
+
+    switch (t->tag) {
+    case TYPE_NONE: return buf;
+    case TYPE_BOOL: buf = write_str(buf, "bool"); return buf;
+    case TYPE_U8:   buf = write_str(buf, "u8");  return buf;
+    case TYPE_U16:  buf = write_str(buf, "u16"); return buf;
+    case TYPE_U32:  buf = write_str(buf, "u32"); return buf;
+    case TYPE_U64:  buf = write_str(buf, "u64"); return buf;
+    case TYPE_I8:   buf = write_str(buf, "i8");  return buf;
+    case TYPE_I16:  buf = write_str(buf, "i16"); return buf;
+    case TYPE_I32:  buf = write_str(buf, "i32"); return buf;
+    case TYPE_I64:  buf = write_str(buf, "i64"); return buf;
+    case TYPE_F16:  buf = write_str(buf, "f16"); return buf;
+    case TYPE_F32:  buf = write_str(buf, "f32"); return buf;
+    case TYPE_F64:  buf = write_str(buf, "f64"); return buf;  
+    case TYPE_POINTER:  buf = write_str(buf, "ptr"); return buf;  
+    default: buf = write_str(buf, "unimpl"); return buf;
+    }
+}
+
+string type_to_string(type* t) {
+    // get a backing buffer
+    char buf[500];
+    memset(buf, 0, sizeof(buf));
+    type2str_internal(t, buf);
+    // allocate new buffer with concrete backing
+    return string_clone(str(buf));
 }

@@ -47,14 +47,19 @@ typedef struct IR_Symbol {
 } IR_Symbol;
 
 typedef struct IR_Global {
-    type* T;
-
     IR_Symbol* sym;
 
-    u8* data;
-    u32 data_len;
+    bool is_symbol_ref;
 
-    bool zeroed;
+    union {
+        struct {
+            u8* data;
+            u32 data_len;
+            bool zeroed;
+        };
+        IR_Symbol* symref;
+    };
+
     bool read_only;
 } IR_Global;
 
@@ -83,7 +88,7 @@ typedef struct IR_Function {
 
 typedef struct IR_FuncItem {
     type* T;
-    // probably more here!
+    // probably more here later!
 } IR_FuncItem;
 
 typedef struct IR_BasicBlock {
@@ -122,6 +127,9 @@ enum {
     // IR_StackAlloc
     IR_STACKALLOC,
 
+    // IR_GetFieldPtr
+    IR_GETFIELDPTR,
+
     // IR_Load
     IR_LOAD,
     IR_VOL_LOAD,
@@ -157,6 +165,7 @@ enum {
 
 // basic IR structure
 typedef struct IR {
+    type* T;
     u32 number;
     u8 tag;
 } IR;
@@ -182,6 +191,14 @@ typedef struct IR_StackAlloc {
     u32 align;
     type* T;
 } IR_StackAlloc;
+
+typedef struct IR_GetFieldPtr {
+    IR base;
+
+    u16 index;
+
+    IR* source;
+} IR_GetFieldPtr;
 
 typedef struct IR_Load {
     IR base;
@@ -302,7 +319,7 @@ extern const size_t ir_sizes[];
 IR_Module*     ir_new_module(string name);
 IR_Function*   ir_new_function(IR_Module* mod, IR_Symbol* sym, bool global);
 IR_BasicBlock* ir_new_basic_block(IR_Function* fn, string name);
-IR_Global*     ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only, bool zeroed);
+IR_Global*     ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only);
 IR_Symbol*     ir_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
 IR_Symbol*     ir_find_symbol(IR_Module* mod, string name);
 IR_Symbol*     ir_find_or_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
@@ -310,17 +327,19 @@ IR_Symbol*     ir_find_or_new_symbol(IR_Module* mod, string name, u8 tag, bool f
 void ir_set_func_params(IR_Function* f, u16 count, ...);
 void ir_set_func_returns(IR_Function* f, u16 count, ...);
 u32  ir_bb_index(IR_Function* fn, IR_BasicBlock* bb);
-void ir_set_global_data(IR_Global* global, type* T, u8* data, u32 data_len);
+void ir_set_global_data(IR_Global* global, u8* data, u32 data_len, bool zeroed);
+void ir_set_global_symref(IR_Global* global, IR_Symbol* symref);
 
 IR* ir_add(IR_BasicBlock* bb, IR* ir);
 IR* ir_make(IR_Function* f, u8 type);
-IR* ir_make_binop(IR_Function* f, IR* lhs, IR* rhs, u8 type);
+IR* ir_make_binop(IR_Function* f, u8 type, IR* lhs, IR* rhs);
 IR* ir_make_cast(IR_Function* f, IR* source, type* to);
 IR* ir_make_stackalloc(IR_Function* f, u32 size, u32 align, type* T);
+IR* ir_make_getfieldptr(IR_Function* f, u16 index, IR* source);
 IR* ir_make_load(IR_Function* f, IR* location, type* T, bool is_vol);
 IR* ir_make_store(IR_Function* f, IR* location, IR* value, type* T, bool is_vol);
-IR* ir_make_const(IR_Function* f, type* T);
-IR* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol, type* T);
+IR* ir_make_const(IR_Function* f);
+IR* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol);
 IR* ir_make_mov(IR_Function* f, IR* source);
 IR* ir_make_phi(IR_Function* f, u16 count, ...);
 IR* ir_make_jump(IR_Function* f, IR_BasicBlock* dest);
@@ -331,6 +350,11 @@ IR* ir_make_return(IR_Function* f);
 
 void ir_add_phi_source(IR_Phi* phi, IR* source, IR_BasicBlock* source_block);
 
+void ir_type_resolve(IR_Module* mod, IR_Function* f, IR* ir, bool assume_correct);
+void ir_type_resolve_all(IR_Module* mod, IR_Function* f, bool assume_correct);
+void ir_print_module(IR_Module* mod);
 void ir_print_function(IR_Function* f);
 void ir_print_bb(IR_BasicBlock* bb);
 void ir_print_ir(IR* ir);
+
+string type_to_string(type* t);
