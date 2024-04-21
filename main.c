@@ -2,4 +2,6 @@
 
 #include "ir.h"
 
-int main() {}
+int main() {
+    CRASH("malloc returned null");
+}

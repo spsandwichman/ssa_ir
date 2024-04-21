@@ -187,6 +187,10 @@ void ir_add_phi_source(IR_Phi* phi, IR* source, BB* source_block) {
     IR** new_sources    = malloc(sizeof(*phi->sources) * (phi->len + 1));
     BB** new_source_BBs = malloc(sizeof(*phi->source_BBs) * (phi->len + 1));
 
+    if (!new_sources || !new_source_BBs) {
+        CRASH("ir_add_phi_source() malloc returned null");
+    }
+
     memcpy(new_sources, phi->sources, sizeof(*phi->sources) * phi->len);
     memcpy(new_source_BBs, phi->source_BBs, sizeof(*phi->source_BBs) * phi->len);
 

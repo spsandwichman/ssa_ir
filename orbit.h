@@ -57,11 +57,11 @@ typedef _Float16 f16;
 #endif
 
 #define TODO(msg) do {\
-    printf("\x1b[36m\x1b[1mTODO\x1b[0m: \"%s\" at %s:%d\n", (msg), (__FILE__), (__LINE__)); \
+    printf("\x1b[36m\x1b[1mTODO\x1b[0m: \"%s\" in %s() at %s:%d\n", (msg), (__func__), (__FILE__), (__LINE__)); \
     exit(EXIT_FAILURE); } while (0)
 
 #define CRASH(msg) do { \
-    printf("\x1b[31m\x1b[1mCRASH\x1b[0m: \"%s\" at %s:%d\n", (msg), (__FILE__), (__LINE__)); \
+    printf("\x1b[31m\x1b[1mCRASH\x1b[0m: \"%s\" in %s() at %s:%d\n", (msg), (__func__), (__FILE__), (__LINE__)); \
     exit(EXIT_FAILURE); } while (0)
 
 #ifdef __GNUC__

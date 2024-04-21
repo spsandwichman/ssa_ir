@@ -57,6 +57,8 @@ typedef struct IR_Global {
     bool read_only;
 } IR_Global;
 
+#define IR_FN_ALLOCA_BLOCK_SIZE 0x1000
+
 typedef struct IR_Function {
     IR_Symbol* sym;
 
@@ -71,8 +73,6 @@ typedef struct IR_Function {
 
     arena alloca;
 } IR_Function;
-
-#define IR_FN_ALLOCA_BLOCK_SIZE 0x1000
 
 typedef struct BB {
     IR** at;
@@ -134,10 +134,8 @@ enum {
 
     // IR_GetParam
     IR_GETPARAM,
-
     // IR_SetReturn
     IR_SETRETURN,
-
     // IR_Return
     IR_RETURN,
 
@@ -258,17 +256,28 @@ typedef struct IR_Branch {
     BB* if_false;
 } IR_Branch;
 
+// get value from register parameter OR the pointer to a stack parameter.
+// if register, lifetime of the register starts from the start of the entry 
+// basic block and continues to this node.
+// MUST BE THE FIRST INSTRUCTION IN THE ENTRY BLOCK OR IN A SEQUENCE OF 
+// OTHER IR_GetParam INSTRUCTIONS
+// BECAUSE OF HOW THE REG ALLOCATOR USES THIS TO CONSTRUCT MACHINE REGISTER LIFETIMES
+// ALONGSIDE VIRTUAL REGISTER LIFETIMES
 typedef struct IR_GetParam {
     IR base;
 
     u16 param_idx;
 } IR_GetParam;
 
+// set register return val
+// can also be used as a source, for retrieving a pointer
+// IF SOURCE != NULL, IT MUST BE BEFORE AN IR_Return OR ANOTHER IR_SetReturn INSTRUCTION
+// SAME REASON AS ABOVE
 typedef struct IR_SetReturn {
     IR base;
 
     u16 return_idx;
-    IR* source;
+    IR* source; // can be NULL if referring to a stack return val
 } IR_SetReturn;
 
 typedef struct IR_Return {
