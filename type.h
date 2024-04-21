@@ -149,3 +149,5 @@ u32 type_real_size_of(type* t);
 u32 type_real_align_of(type*t);
 
 bool type_is_infinite(type* t);
+
+string type_to_string(type* t);

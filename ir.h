@@ -6,11 +6,11 @@
 
 typedef struct IR IR;
 typedef struct IR_BasicBlock IR_BasicBlock;
-typedef struct CFG CFG;
 typedef struct IR_Module IR_Module;
 typedef struct IR_Symbol IR_Symbol;
 typedef struct IR_Global IR_Global;
 typedef struct IR_Function IR_Function;
+typedef struct IR_FuncItem IR_FuncItem;
 
 typedef struct IR_Module {
     IR_Function** functions;
@@ -42,6 +42,7 @@ typedef struct IR_Symbol {
         IR_Global* global;
     };
     bool is_function;
+    bool is_extern;
     u8 tag;
 } IR_Symbol;
 
@@ -68,11 +69,22 @@ typedef struct IR_Function {
         u32 cap;
     } blocks;
 
+    IR_FuncItem** params;
+    IR_FuncItem** returns;
+
+    u16 params_len;
+    u16 returns_len;
+
     u32 entry_idx;
     u32 exit_idx;
 
     arena alloca;
 } IR_Function;
+
+typedef struct IR_FuncItem {
+    type* T;
+    // probably more here!
+} IR_FuncItem;
 
 typedef struct IR_BasicBlock {
     IR** at;
@@ -98,7 +110,8 @@ enum {
     IR_NOR,
     IR_XOR,
     IR_SHL,
-    IR_SHR,
+    IR_ASR,
+    IR_LSR,
     IR_TRUNC,
     IR_SEXT,
     IR_ZEXT,
@@ -132,10 +145,10 @@ enum {
     // IR_Jump
     IR_JUMP,
 
-    // IR_GetParam
-    IR_GETPARAM,
-    // IR_SetReturn
-    IR_SETRETURN,
+    // IR_ParamVal
+    IR_PARAMVAL,
+    // IR_ReturnVal
+    IR_RETURNVAL,
     // IR_Return
     IR_RETURN,
 
@@ -260,25 +273,25 @@ typedef struct IR_Branch {
 // if register, lifetime of the register starts from the start of the entry 
 // basic block and continues to this node.
 // MUST BE THE FIRST INSTRUCTION IN THE ENTRY BLOCK OR IN A SEQUENCE OF 
-// OTHER IR_GetParam INSTRUCTIONS
+// OTHER IR_ParamVal INSTRUCTIONS
 // BECAUSE OF HOW THE REG ALLOCATOR USES THIS TO CONSTRUCT MACHINE REGISTER LIFETIMES
 // ALONGSIDE VIRTUAL REGISTER LIFETIMES
-typedef struct IR_GetParam {
+typedef struct IR_ParamVal {
     IR base;
 
     u16 param_idx;
-} IR_GetParam;
+} IR_ParamVal;
 
 // set register return val
 // can also be used as a source, for retrieving a pointer
-// IF SOURCE != NULL, IT MUST BE BEFORE AN IR_Return OR ANOTHER IR_SetReturn INSTRUCTION
+// IF SOURCE != NULL, IT MUST BE BEFORE AN IR_Return OR ANOTHER IR_ReturnVal INSTRUCTION
 // SAME REASON AS ABOVE
-typedef struct IR_SetReturn {
+typedef struct IR_ReturnVal {
     IR base;
 
     u16 return_idx;
     IR* source; // can be NULL if referring to a stack return val
-} IR_SetReturn;
+} IR_ReturnVal;
 
 typedef struct IR_Return {
     IR base;
@@ -286,29 +299,38 @@ typedef struct IR_Return {
 
 extern const size_t ir_sizes[];
 
-IR_Module*   ir_new_module(string name);
-IR_Function* ir_new_function(IR_Module* mod, IR_Symbol* sym, bool global);
-IR_Global*   ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only, bool zeroed);
-IR_Symbol*   ir_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
-IR_Symbol*   ir_find_symbol(IR_Module* mod, string name);
-IR_Symbol*   ir_find_or_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
+IR_Module*     ir_new_module(string name);
+IR_Function*   ir_new_function(IR_Module* mod, IR_Symbol* sym, bool global);
+IR_BasicBlock* ir_new_basic_block(IR_Function* fn, string name);
+IR_Global*     ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only, bool zeroed);
+IR_Symbol*     ir_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
+IR_Symbol*     ir_find_symbol(IR_Module* mod, string name);
+IR_Symbol*     ir_find_or_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
 
+void ir_set_func_params(IR_Function* f, u16 count, ...);
+void ir_set_func_returns(IR_Function* f, u16 count, ...);
+u32  ir_bb_index(IR_Function* fn, IR_BasicBlock* bb);
 void ir_set_global_data(IR_Global* global, type* T, u8* data, u32 data_len);
 
-IR*            ir_make(IR_Function* f, u8 type);
-IR_BinOp*      ir_make_binop(IR_Function* f, IR* lhs, IR* rhs, u8 type);
-IR_Cast*       ir_make_cast(IR_Function* f, IR* source, type* to);
-IR_StackAlloc* ir_make_stackalloc(IR_Function* f, u32 size, u32 align, type* T);
-IR_Load*       ir_make_load(IR_Function* f, IR* location, type* T, bool is_vol);
-IR_Store*      ir_make_store(IR_Function* f, IR* location, IR* value, type* T, bool is_vol);
-IR_Const*      ir_make_const(IR_Function* f, type* T);
-IR_LoadSymbol* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol, type* T);
-IR_Mov*        ir_make_mov(IR_Function* f, IR* source);
-IR_Phi*        ir_make_phi(IR_Function* f, u16 count, ...);
-IR_Jump*       ir_make_jump(IR_Function* f, IR_BasicBlock* dest);
-IR_Branch*     ir_make_branch(IR_Function* f, u8 cond, IR* lhs, IR* rhs, IR_BasicBlock* if_true, IR_BasicBlock* if_false);
-IR_GetParam*   ir_make_getparam(IR_Function* f, u16 param);
-IR_SetReturn*  ir_make_setreturn(IR_Function* f, u16 param, IR* source);
-IR_Return*     ir_make_return(IR_Function* f);
+IR* ir_add(IR_BasicBlock* bb, IR* ir);
+IR* ir_make(IR_Function* f, u8 type);
+IR* ir_make_binop(IR_Function* f, IR* lhs, IR* rhs, u8 type);
+IR* ir_make_cast(IR_Function* f, IR* source, type* to);
+IR* ir_make_stackalloc(IR_Function* f, u32 size, u32 align, type* T);
+IR* ir_make_load(IR_Function* f, IR* location, type* T, bool is_vol);
+IR* ir_make_store(IR_Function* f, IR* location, IR* value, type* T, bool is_vol);
+IR* ir_make_const(IR_Function* f, type* T);
+IR* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol, type* T);
+IR* ir_make_mov(IR_Function* f, IR* source);
+IR* ir_make_phi(IR_Function* f, u16 count, ...);
+IR* ir_make_jump(IR_Function* f, IR_BasicBlock* dest);
+IR* ir_make_branch(IR_Function* f, u8 cond, IR* lhs, IR* rhs, IR_BasicBlock* if_true, IR_BasicBlock* if_false);
+IR* ir_make_paramval(IR_Function* f, u16 param);
+IR* ir_make_returnval(IR_Function* f, u16 param, IR* source);
+IR* ir_make_return(IR_Function* f);
 
 void ir_add_phi_source(IR_Phi* phi, IR* source, IR_BasicBlock* source_block);
+
+void ir_print_function(IR_Function* f);
+void ir_print_bb(IR_BasicBlock* bb);
+void ir_print_ir(IR* ir);

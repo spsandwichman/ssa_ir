@@ -807,3 +807,34 @@ bool implicitly_cast(type* to, type* from) {
     }
     return false;
 }
+
+static char* write_str(char* buf, char* src) {
+    memcpy(buf, src, strlen(src));
+    return buf + strlen(src);
+}
+
+static char* type2str_internal(type* t, char* buf) {
+    switch (t->tag) {
+    case TYPE_BOOL: buf = write_str(buf, "bool"); return buf;
+    case TYPE_U8:   buf = write_str(buf, "u8");  return buf;
+    case TYPE_U16:  buf = write_str(buf, "u16"); return buf;
+    case TYPE_U32:  buf = write_str(buf, "u32"); return buf;
+    case TYPE_U64:  buf = write_str(buf, "u64"); return buf;
+    case TYPE_I8:   buf = write_str(buf, "i8");  return buf;
+    case TYPE_I16:  buf = write_str(buf, "i16"); return buf;
+    case TYPE_I32:  buf = write_str(buf, "i32"); return buf;
+    case TYPE_I64:  buf = write_str(buf, "i64"); return buf;
+    case TYPE_F16:  buf = write_str(buf, "f16"); return buf;
+    case TYPE_F32:  buf = write_str(buf, "f32"); return buf;
+    case TYPE_F64:  buf = write_str(buf, "f64"); return buf;    
+    default: buf = write_str(buf, "unimplemented"); return buf;
+    }
+}
+
+string type_to_string(type* t) {
+    // get a backing buffer
+    char buf[500] = {0};
+    type2str_internal(t, buf);
+    // allocate new buffer with concrete backing
+    return string_clone(str(buf));
+}
