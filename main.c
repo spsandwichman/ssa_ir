@@ -3,5 +3,6 @@
 #include "ir.h"
 
 int main() {
-    CRASH("malloc returned null");
+    IR_Module* mod = ir_new_module(str("main"));
+    
 }

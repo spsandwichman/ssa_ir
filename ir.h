@@ -5,7 +5,7 @@
 #include "arena.h"
 
 typedef struct IR IR;
-typedef struct BB BB;
+typedef struct IR_BasicBlock IR_BasicBlock;
 typedef struct CFG CFG;
 typedef struct IR_Module IR_Module;
 typedef struct IR_Symbol IR_Symbol;
@@ -63,7 +63,7 @@ typedef struct IR_Function {
     IR_Symbol* sym;
 
     struct {
-        BB** at;
+        IR_BasicBlock** at;
         u32 len;
         u32 cap;
     } blocks;
@@ -74,13 +74,13 @@ typedef struct IR_Function {
     arena alloca;
 } IR_Function;
 
-typedef struct BB {
+typedef struct IR_BasicBlock {
     IR** at;
     u64 len;
     u64 cap;
 
     string name;
-} BB;
+} IR_BasicBlock;
 
 enum {
     IR_INVALID,
@@ -225,14 +225,14 @@ typedef struct IR_Phi {
     IR base;
 
     IR** sources;
-    BB** source_BBs;
+    IR_BasicBlock** source_BBs;
     u16 len;
 } IR_Phi;
 
 typedef struct IR_Jump {
     IR base;
 
-    BB* dest;
+    IR_BasicBlock* dest;
 } IR_Jump;
 
 enum {
@@ -252,8 +252,8 @@ typedef struct IR_Branch {
     IR* lhs;
     IR* rhs;
 
-    BB* if_true;
-    BB* if_false;
+    IR_BasicBlock* if_true;
+    IR_BasicBlock* if_false;
 } IR_Branch;
 
 // get value from register parameter OR the pointer to a stack parameter.
@@ -288,9 +288,12 @@ extern const size_t ir_sizes[];
 
 IR_Module*   ir_new_module(string name);
 IR_Function* ir_new_function(IR_Module* mod, IR_Symbol* sym, bool global);
+IR_Global*   ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only, bool zeroed);
 IR_Symbol*   ir_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
 IR_Symbol*   ir_find_symbol(IR_Module* mod, string name);
 IR_Symbol*   ir_find_or_new_symbol(IR_Module* mod, string name, u8 tag, bool function, void* ref);
+
+void ir_set_global_data(IR_Global* global, type* T, u8* data, u32 data_len);
 
 IR*            ir_make(IR_Function* f, u8 type);
 IR_BinOp*      ir_make_binop(IR_Function* f, IR* lhs, IR* rhs, u8 type);
@@ -302,10 +305,10 @@ IR_Const*      ir_make_const(IR_Function* f, type* T);
 IR_LoadSymbol* ir_make_loadsymbol(IR_Function* f, IR_Symbol* symbol, type* T);
 IR_Mov*        ir_make_mov(IR_Function* f, IR* source);
 IR_Phi*        ir_make_phi(IR_Function* f, u16 count, ...);
-IR_Jump*       ir_make_jump(IR_Function* f, BB* dest);
-IR_Branch*     ir_make_branch(IR_Function* f, u8 cond, IR* lhs, IR* rhs, BB* if_true, BB* if_false);
+IR_Jump*       ir_make_jump(IR_Function* f, IR_BasicBlock* dest);
+IR_Branch*     ir_make_branch(IR_Function* f, u8 cond, IR* lhs, IR* rhs, IR_BasicBlock* if_true, IR_BasicBlock* if_false);
 IR_GetParam*   ir_make_getparam(IR_Function* f, u16 param);
 IR_SetReturn*  ir_make_setreturn(IR_Function* f, u16 param, IR* source);
 IR_Return*     ir_make_return(IR_Function* f);
 
-void ir_add_phi_source(IR_Phi* phi, IR* source, BB* source_block);
+void ir_add_phi_source(IR_Phi* phi, IR* source, IR_BasicBlock* source_block);

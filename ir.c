@@ -23,6 +23,29 @@ IR_Function* ir_new_function(IR_Module* mod, IR_Symbol* sym, bool global) {
     da_init(&fn->blocks, 1);
     fn->entry_idx = 0;
     fn->exit_idx = 0;
+
+    mod->functions = realloc(mod->functions, mod->functions_len+1);
+    mod->functions[mod->functions_len++] = fn;
+}
+
+// if (sym == NULL), create new symbol with no name
+IR_Global* ir_new_global(IR_Module* mod, IR_Symbol* sym, bool global, bool read_only, bool zeroed) {
+    IR_Global* gl = malloc(sizeof(IR_Global));
+
+    gl->sym = sym ? sym : ir_new_symbol(mod, NULL_STR, global, false, gl);
+    gl->read_only = read_only;
+    gl->zeroed = zeroed;
+    gl->data = NULL;
+    gl->data_len = 0;
+
+    mod->globals = realloc(mod->globals, mod->globals_len+1);
+    mod->globals[mod->globals_len++] = gl;
+}
+
+void ir_set_global_data(IR_Global* global, type* T, u8* data, u32 data_len) {
+    global->T = T;
+    global->data = data;
+    global->data_len = data_len;
 }
 
 // WARNING: does NOT check if a symbol already exists
@@ -50,6 +73,10 @@ IR_Symbol* ir_find_symbol(IR_Module* mod, string name) {
         }
     }
     return NULL;
+}
+
+IR_BasicBlock* ir_new_basic_block() {
+    TODO("");
 }
 
 IR* ir_make(IR_Function* f, u8 type) {
@@ -175,20 +202,20 @@ IR_Phi* ir_make_phi(IR_Function* f, u16 count, ...) {
     va_start(args, count);
     FOR_RANGE(i, 0, count) {
         ir->sources[i]    = va_arg(args, IR*);
-        ir->source_BBs[i] = va_arg(args, BB*);
+        ir->source_BBs[i] = va_arg(args, IR_BasicBlock*);
     }
     va_end(args);
 
     return ir;
 }
 
-void ir_add_phi_source(IR_Phi* phi, IR* source, BB* source_block) {
+void ir_add_phi_source(IR_Phi* phi, IR* source, IR_BasicBlock* source_block) {
     // wrote this and then remembered realloc exists. too late :3
     IR** new_sources    = malloc(sizeof(*phi->sources) * (phi->len + 1));
-    BB** new_source_BBs = malloc(sizeof(*phi->source_BBs) * (phi->len + 1));
+    IR_BasicBlock** new_source_BBs = malloc(sizeof(*phi->source_BBs) * (phi->len + 1));
 
     if (!new_sources || !new_source_BBs) {
-        CRASH("ir_add_phi_source() malloc returned null");
+        CRASH("malloc returned null");
     }
 
     memcpy(new_sources, phi->sources, sizeof(*phi->sources) * phi->len);
@@ -205,13 +232,13 @@ void ir_add_phi_source(IR_Phi* phi, IR* source, BB* source_block) {
     phi->len++;
 }
 
-IR_Jump* ir_make_jump(IR_Function* f, BB* dest) {
+IR_Jump* ir_make_jump(IR_Function* f, IR_BasicBlock* dest) {
     IR_Jump* ir = (IR_Jump*) ir_make(f, IR_JUMP);
     ir->dest = dest;
     return ir;
 }
 
-IR_Branch* ir_make_branch(IR_Function* f, u8 cond, IR* lhs, IR* rhs, BB* if_true, BB* if_false) {
+IR_Branch* ir_make_branch(IR_Function* f, u8 cond, IR* lhs, IR* rhs, IR_BasicBlock* if_true, IR_BasicBlock* if_false) {
     IR_Branch* ir = (IR_Branch*) ir_make(f, IR_BRANCH);
     ir->cond = cond;
     ir->lhs = lhs;
